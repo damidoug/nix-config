@@ -9,6 +9,7 @@
   ];
 
   system = {
+    primaryUser = "dami";
     nixpkgsRelease = "25.11";
     stateVersion = 6;
   };

@@ -19,12 +19,19 @@
     };
     initrd.availableKernelModules = [
       "xhci_pci"
-      "ehci_pci"
-      "ahci"
+      "nvme"
       "usb_storage"
       "sd_mod"
-      "sdhci_pci"
     ];
     kernelParams = [ "libata.force=noncq" ];
   };
+
+  zramSwap.enable = true;
+
+  swapDevices = [
+    {
+      device = "/var/lib/swapfile";
+      size = 4096; # 4GB (Change to 8192 when you get 16GB RAM)
+    }
+  ];
 }
