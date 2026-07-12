@@ -1,0 +1,29 @@
+# Nix
+result
+result-*
+.direnv
+.devenv
+
+# Secrets — note: real `.age` files under hosts/**/ are NOT ignored, they're
+# encrypted and meant to be committed (see secrets.nix). These guard against
+# ever accidentally committing an unencrypted key.
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Temporary
+tmp/
+*.log
+
+# Ai
+.claude/*
+!.claude/notes/

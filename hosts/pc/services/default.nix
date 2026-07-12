@@ -1,0 +1,8 @@
+{ ... }:
+{
+  imports = [
+    ./media
+    ./personal
+    ./web
+  ];
+}
