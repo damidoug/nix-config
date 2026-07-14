@@ -95,3 +95,27 @@ Had we trusted the small-context bench (which said `code` liked `-ncmoe 24`), we
 
 **Applied to [`default.nix`](./default.nix):** `main` → `--n-cpu-moe 16`, `code` stays
 `999`, `ocr` stays full-GPU.
+
+## Next tests (later — potential small gains, not problems)
+
+The current config is benchmark-tuned and safe to use. These are optional follow-ups to
+squeeze a bit more, roughly in order of promise. Nothing here is a known issue.
+
+1. **KV-cache quantization (`-ctk q8_0 -ctv q8_0`, needs `-fa on`)** — most promising.
+   Halving the KV cache frees VRAM at 32k. For `code` this is the *only* thing that might
+   let it fit any experts on the GPU (right now the KV cache alone eats the 8 GB). Also
+   lets `main` push `--n-cpu-moe` lower. Re-run the `-d 32768` sweep with q8_0 KV and see
+   if the spill cliff moves. Watch for quality loss on long contexts.
+2. **`main` → `--n-cpu-moe 14`** — measured ~7 % faster (21.4 vs 19.8 tok/s @ 32k) but
+   sits closer to the VRAM spill cliff. Worth it if VRAM headroom proves stable in real
+   use (watch `radeontop` while the desktop is busy).
+3. **Flash attention on/off (`-fa on` vs `off`)** — Polaris reports `fp16: 0`, so FA may
+   not help (or may hurt); it's also the prerequisite for #1. Measure both ways.
+4. **Lower context (e.g. `-c 16384`)** — if you never use 32k, a smaller context frees a
+   lot of VRAM → more experts on GPU for both `main` and `code`. Trade max context for
+   speed. (hermes wants ≥64k though, so keep `main` roomy if it stays hermes' model.)
+5. **Higher-quality quants (Q5_K / Q6_K / Q8_0)** — better answers, larger + slower. A/B
+   quality vs the speed cost, per model. Q4_K_XL is the current sweet spot.
+
+Method for all of the above: `llama-bench -d 32768` (see [`TESTING.md`](./TESTING.md)),
+then fold the winner into the model's `cmd` in `default.nix`.

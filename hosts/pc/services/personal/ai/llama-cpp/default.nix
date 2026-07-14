@@ -15,16 +15,21 @@ let
   port = 11434;
 
   # Flags shared by every model. ${PORT} is llama-swap's macro — it assigns each
-  # model a free port and substitutes it here.
-  #   -ngl 999      offload everything that fits to the GPU (per-model tuning below
-  #                 decides how much of that the MoE experts claw back to the CPU)
+  # model a free port and substitutes it here. `ngl` defaults to 999 (offload
+  # everything that fits) — per-model tuning below claws layers back to the CPU,
+  # either via the MoE experts (`--n-cpu-moe`, for MoE models) or by lowering `ngl`
+  # itself (for dense models, which have no experts to selectively offload).
   #   --jinja       use each model's OWN chat template (this natively fixes the
   #                 broken qwen3-coder template the old Ollama config hand-patched)
   #   -t 16         one thread per physical core; leave SMT for the rest of the box
   #   --metrics     expose Prometheus /metrics (live tokens/sec while in use)
   #   --no-webui    it's an API, not a chat page
   #   -fa auto      let llama.cpp decide flash-attn (benchmark knob — see notes)
-  common = "--host 127.0.0.1 --port \${PORT} -ngl 999 --jinja -t 16 --metrics --no-webui -fa auto";
+  common =
+    {
+      ngl ? 999,
+    }:
+    "--host 127.0.0.1 --port \${PORT} -ngl ${toString ngl} --jinja -t 16 --metrics --no-webui -fa auto";
 
   # 8 GB VRAM holds ~one small model. --n-cpu-moe N keeps the big MoE *expert* tensors
   # in the 46 GB of DDR4 (the 5950X crunches them) while attention/KV stay on the GPU —
@@ -41,24 +46,27 @@ let
     # +26% vs all-CPU); pushing lower (14 -> 21 tok/s) creeps toward VRAM spill.
     # A/B alternative (a touch smarter but ~50% larger, so it fits worse): swap the -hf
     # for `unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:Q4_K_XL`.
-    main = {
-      cmd = "${llamaServer} ${common} -hf unsloth/gpt-oss-20b-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 16";
-    };
+    main.cmd = "${llamaServer} ${common { }} -hf unsloth/gpt-oss-20b-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 16";
 
     # CODE — for opencode etc. Qwen3-Coder-30B-A3B: MoE, ~3.3B active of 30B, the
     # strongest local coder in this class. --n-cpu-moe 999 (ALL experts on CPU) is
     # deliberate and optimal here: at 16.45GB + 32k KV cache the model can't share 8GB
     # VRAM, so moving ANY expert to the GPU spills into GTT and collapses tg (12.5 ->
     # 6.4 -> 2.9 tok/s as N drops). Unlike `main`, do not lower this. (README.md)
-    code = {
-      cmd = "${llamaServer} ${common} -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 999";
-    };
+    code.cmd = "${llamaServer} ${common { }} -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 999";
 
     # OCR / vision — Qwen3-VL-8B. Dense 8B, small enough to sit almost entirely in
     # VRAM (no --n-cpu-moe). `-hf` auto-fetches the paired mmproj vision projector.
-    ocr = {
-      cmd = "${llamaServer} ${common} -hf unsloth/Qwen3-VL-8B-Instruct-GGUF:Q4_K_XL -c 8192";
-    };
+    ocr.cmd = "${llamaServer} ${common { }} -hf unsloth/Qwen3-VL-8B-Instruct-GGUF:Q4_K_XL -c 8192";
+
+    # UNCENSORED — Dolphin-Mistral-24B-Venice-Edition. Dense 24B (14.33 GiB Q4_K_M),
+    # no vendor-side alignment/refusals. Unlike `main`/`code` this is a DENSE model,
+    # not MoE, so `--n-cpu-moe` is a no-op here — the CPU/GPU split knob for dense
+    # models is `-ngl` (layers offloaded to GPU) instead. At 32k ctx the KV cache alone
+    # (40 layers, 8 KV heads) eats most of the 8 GB VRAM, so weights can't fully fit;
+    # `-ngl 16` (of 40 layers) is an untuned starting guess, not a benchmark result —
+    # re-run the `-d 32768` sweep from README.md and fold the winner in here.
+    uncensored.cmd = "${llamaServer} ${common { ngl = 16; }} -hf bartowski/cognitivecomputations_Dolphin-Mistral-24B-Venice-Edition-GGUF:Q4_K_M -c 32768";
   };
 in
 {
