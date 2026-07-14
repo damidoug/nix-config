@@ -31,22 +31,16 @@
       timezone = host.environment.locale.timeZone;
       toolsets = [ "all" ];
 
-      # Repointed at the local Ollama instance (see sibling ollama/default.nix) —
-      # gpt-oss:20b was the only local model tested that reliably called
-      # web_search/web_fetch when needed and correctly declined when not
-      # (see notes/ollama-bench-results/dashboard.html). Ollama ignores the
+      # Points at the local llama-swap endpoint (see sibling llama-cpp/default.nix),
+      # which serves an OpenAI-compatible /v1 API and hot-swaps the underlying model
+      # by name. "main" = gpt-oss-20b — the model that reliably called
+      # web_search/web_fetch when needed and declined when not. llama.cpp ignores the
       # api_key value but the OpenAI-compatible client requires a non-empty one.
-      #
-      # Uses the gpt-oss-agent variant (gpt-oss:20b baked at num_ctx 64k) rather
-      # than the base model: hermes' tool schemas + system prompt need the large
-      # context, and the OpenAI /v1 endpoint can't pass num_ctx per request, so the
-      # context has to live in the model itself. Daily chat still uses plain
-      # gpt-oss:20b at the smaller global default for speed.
       model = {
         provider = "auto";
-        default = "gpt-oss-agent";
+        default = "main";
         base_url = "http://127.0.0.1:11434/v1";
-        api_key = "ollama";
+        api_key = "llama";
       };
 
       terminal.cwd = "/var/lib/hermes/workspace";

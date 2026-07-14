@@ -1,6 +1,6 @@
 {
   imports = [
     ./hermes
-    ./ollama
+    ./llama-cpp
   ];
 }
