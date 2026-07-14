@@ -11,6 +11,12 @@
         rev = "c4d1925ae9b76a1b641877328209ad25cfeb5ef2";
         hash = "sha256-THnCoQYOe/nKk1mA2+30BwvMrQ6HUPexTOFf9TSJjWg=";
       })
+      (pkgs.fetchFromGitHub {
+        owner = "obra";
+        repo = "superpowers";
+        rev = "d884ae04edebef577e82ff7c4e143debd0bbec99";
+        hash = "sha256-kHdQ9e44doBk2yYW88tMSCqVG8ycYcvJSZlrIziXhpA=";
+      })
     ];
 
     rules.environment = ''
