@@ -26,23 +26,30 @@ let
   #   -fa auto      let llama.cpp decide flash-attn (benchmark knob — see notes)
   common = "--host 127.0.0.1 --port \${PORT} -ngl 999 --jinja -t 16 --metrics --no-webui -fa auto";
 
-  # 8 GB VRAM holds ~one small model. --n-cpu-moe 999 keeps the big MoE *expert*
-  # tensors in the 46 GB of DDR4 (the 5950X crunches them) while attention/KV stay
-  # on the GPU — the hybrid sweet spot for this "small VRAM, huge CPU/RAM" box.
+  # 8 GB VRAM holds ~one small model. --n-cpu-moe N keeps the big MoE *expert* tensors
+  # in the 46 GB of DDR4 (the 5950X crunches them) while attention/KV stay on the GPU —
+  # the hybrid sweet spot for this "small VRAM, huge CPU/RAM" box. The per-model N below
+  # is TUNED from a benchmark sweep at the real 32k context (see README.md): it's the
+  # count of expert layers to keep on the CPU, so lower N = more experts on the GPU.
   # The exact quant tag (:UD-Q4_K_XL) is matched against the GGUF filename; if a
   # first run says "file not found", `-hf <repo>` with no tag lists what's available.
   models = {
     # MAIN — general chat + tools. gpt-oss-20b: MoE, ~3.6B active of 21B, strong
     # tool-calling, and the smallest strong MoE (~12GB MXFP4) so it fits this 8GB-VRAM
     # box better than bigger MoEs. Text-only, which is why `ocr` below is separate.
+    # --n-cpu-moe 16: at 32k ctx this fits ~8 experts on the GPU (15.8 -> 19.8 tok/s,
+    # +26% vs all-CPU); pushing lower (14 -> 21 tok/s) creeps toward VRAM spill.
     # A/B alternative (a touch smarter but ~50% larger, so it fits worse): swap the -hf
     # for `unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:Q4_K_XL`.
     main = {
-      cmd = "${llamaServer} ${common} -hf unsloth/gpt-oss-20b-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 999";
+      cmd = "${llamaServer} ${common} -hf unsloth/gpt-oss-20b-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 16";
     };
 
     # CODE — for opencode etc. Qwen3-Coder-30B-A3B: MoE, ~3.3B active of 30B, the
-    # strongest local coder in this class. Biggest total weights → leans on RAM most.
+    # strongest local coder in this class. --n-cpu-moe 999 (ALL experts on CPU) is
+    # deliberate and optimal here: at 16.45GB + 32k KV cache the model can't share 8GB
+    # VRAM, so moving ANY expert to the GPU spills into GTT and collapses tg (12.5 ->
+    # 6.4 -> 2.9 tok/s as N drops). Unlike `main`, do not lower this. (README.md)
     code = {
       cmd = "${llamaServer} ${common} -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_XL -c 32768 --n-cpu-moe 999";
     };
